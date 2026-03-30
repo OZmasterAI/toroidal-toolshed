@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+.claude-state.json
+.claude/
+toolshed.json

@@ -1,0 +1,13 @@
+[Unit]
+Description=Toolshed MCP Proxy Server
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /path/to/toolshed.py --config /path/to/toolshed.json
+Restart=always
+RestartSec=3
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=default.target

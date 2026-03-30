@@ -1,0 +1,18 @@
+{
+  "servers": {
+    "my-http-server": {
+      "type": "http",
+      "url": "http://127.0.0.1:8742/mcp"
+    },
+    "my-stdio-server": {
+      "type": "stdio",
+      "command": "python3",
+      "args": ["path/to/your/mcp_server.py"],
+      "env": {}
+    }
+  },
+  "groups": {
+    "research": ["my-http-server:search", "my-http-server:get"],
+    "ops": ["my-http-server:health_check"]
+  }
+}
