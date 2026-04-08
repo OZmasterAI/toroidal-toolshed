@@ -138,7 +138,13 @@ class BackendManager:
             concurrency = (srv_cfg or {}).get("concurrency", DEFAULT_CONCURRENCY)
             self._semaphores[name] = asyncio.Semaphore(concurrency)
             logger.info("Connected to HTTP backend: %s (%s)", name, url)
-        except (ConnectionError, OSError, asyncio.TimeoutError, RuntimeError) as e:
+        except (
+            ConnectionError,
+            OSError,
+            asyncio.TimeoutError,
+            RuntimeError,
+            BaseExceptionGroup,
+        ) as e:
             await self._cleanup_backend(name)
             raise ConnectionError(
                 f"Cannot connect to HTTP backend '{name}': {e}"
@@ -269,6 +275,7 @@ class BackendManager:
                 RuntimeError,
                 asyncio.CancelledError,
                 EOFError,
+                BaseExceptionGroup,
             ):
                 pass  # cleanup must not raise
         self._sessions.pop(name, None)
@@ -500,7 +507,7 @@ async def startup(config_path: str) -> None:
                     srv.get("env"),
                     srv_cfg=srv,
                 )
-        except (ConnectionError, OSError, RuntimeError) as e:
+        except (ConnectionError, OSError, RuntimeError, BaseExceptionGroup) as e:
             logger.warning("Backend '%s' unavailable at startup: %s", name, e)
 
     _catalog = ToolCatalog(_manager, config.get("groups", {}))
