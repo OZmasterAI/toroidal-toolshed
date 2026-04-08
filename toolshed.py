@@ -14,7 +14,6 @@ import json
 import logging
 import os
 import re
-import signal
 import sys
 import time
 from datetime import timedelta
@@ -139,7 +138,7 @@ class BackendManager:
             concurrency = (srv_cfg or {}).get("concurrency", DEFAULT_CONCURRENCY)
             self._semaphores[name] = asyncio.Semaphore(concurrency)
             logger.info("Connected to HTTP backend: %s (%s)", name, url)
-        except (ConnectionError, OSError, asyncio.TimeoutError) as e:
+        except (ConnectionError, OSError, asyncio.TimeoutError, RuntimeError) as e:
             await self._cleanup_backend(name)
             raise ConnectionError(
                 f"Cannot connect to HTTP backend '{name}': {e}"
@@ -253,7 +252,7 @@ class BackendManager:
                 )
             logger.info("Reconnected backend: %s", name)
             return True
-        except (ConnectionError, OSError) as e:
+        except (ConnectionError, OSError, RuntimeError) as e:
             logger.warning("Reconnect failed for %s: %s", name, e)
             return False
 
@@ -264,7 +263,13 @@ class BackendManager:
                 continue
             try:
                 await store[name].__aexit__(None, None, None)
-            except (ConnectionError, OSError, RuntimeError):
+            except (
+                ConnectionError,
+                OSError,
+                RuntimeError,
+                asyncio.CancelledError,
+                EOFError,
+            ):
                 pass  # cleanup must not raise
         self._sessions.pop(name, None)
         self._session_ctx.pop(name, None)
@@ -312,7 +317,7 @@ class ToolCatalog:
                 "status": "connected",
             }
             logger.info("Discovered %d tools from %s", len(tools), server_name)
-        except (ConnectionError, OSError, KeyError) as e:
+        except (ConnectionError, OSError, KeyError, RuntimeError) as e:
             logger.error("Discovery failed for %s: %s", server_name, e)
             self._catalog[server_name] = {
                 "tools": [],
@@ -473,7 +478,7 @@ async def _background_refresh():
         try:
             await _catalog.discover_all()
             logger.debug("Background refresh completed")
-        except (ConnectionError, OSError, KeyError) as e:
+        except (ConnectionError, OSError, KeyError, RuntimeError) as e:
             logger.error("Background refresh failed: %s", e)
 
 
@@ -495,7 +500,7 @@ async def startup(config_path: str) -> None:
                     srv.get("env"),
                     srv_cfg=srv,
                 )
-        except (ConnectionError, OSError) as e:
+        except (ConnectionError, OSError, RuntimeError) as e:
             logger.warning("Backend '%s' unavailable at startup: %s", name, e)
 
     _catalog = ToolCatalog(_manager, config.get("groups", {}))
@@ -541,12 +546,11 @@ def main():
     mcp_server.settings.port = args.port
     mcp_server.settings.host = args.host
 
-    def handle_signal(signum, _frame):
-        logger.info("Received signal %s, shutting down", signum)
-        sys.exit(0)
-
-    signal.signal(signal.SIGTERM, handle_signal)
-    signal.signal(signal.SIGINT, handle_signal)
+    # NOTE: Do NOT install sys.exit(0) signal handlers — that raises SystemExit
+    # inside the async event loop, which tears down the MCP session manager's
+    # task group while uvicorn is still accepting requests, causing:
+    #   RuntimeError: Task group is not initialized. Make sure to use run().
+    # Instead, let uvicorn handle SIGINT/SIGTERM natively (graceful shutdown).
 
     import anyio
 
@@ -557,7 +561,10 @@ def main():
         finally:
             await shutdown_server()
 
-    anyio.run(run)
+    try:
+        anyio.run(run)
+    except (KeyboardInterrupt, SystemExit):
+        logger.info("Toolshed exiting")
 
 
 if __name__ == "__main__":
