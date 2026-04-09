@@ -539,26 +539,65 @@ async def _background_refresh():
             logger.error("Background refresh failed: %s", e)
 
 
+STARTUP_RETRY_DELAYS = [2, 3, 5, 8, 12]  # seconds between retries (~30s total)
+
+
+async def _try_connect(manager: BackendManager, name: str, srv: dict) -> bool:
+    """Connect a single backend. Returns True on success, False on failure."""
+    try:
+        if srv["type"] == "http":
+            await manager.connect_http(name, srv["url"], srv_cfg=srv)
+        elif srv["type"] == "stdio":
+            await manager.spawn_stdio(
+                name,
+                srv["command"],
+                srv["args"],
+                srv.get("env"),
+                srv_cfg=srv,
+            )
+        return True
+    except (ConnectionError, OSError, RuntimeError, BaseExceptionGroup) as e:
+        logger.warning("Backend '%s' unavailable: %s", name, e)
+        return False
+
+
 async def startup(config_path: str) -> None:
     global _manager, _catalog, _refresh_task
 
     config = load_config(config_path)
     _manager = BackendManager()
 
+    # First pass — connect everything we can.
+    failed: dict[str, dict] = {}
     for name, srv in config["servers"].items():
-        try:
-            if srv["type"] == "http":
-                await _manager.connect_http(name, srv["url"], srv_cfg=srv)
-            elif srv["type"] == "stdio":
-                await _manager.spawn_stdio(
-                    name,
-                    srv["command"],
-                    srv["args"],
-                    srv.get("env"),
-                    srv_cfg=srv,
-                )
-        except (ConnectionError, OSError, RuntimeError, BaseExceptionGroup) as e:
-            logger.warning("Backend '%s' unavailable at startup: %s", name, e)
+        if not await _try_connect(_manager, name, srv):
+            failed[name] = srv
+
+    # Retry failed backends with backoff (HTTP backends may still be starting).
+    for attempt, delay in enumerate(STARTUP_RETRY_DELAYS, 1):
+        if not failed:
+            break
+        logger.info(
+            "Waiting %ds for %d backend(s): %s (attempt %d/%d)",
+            delay,
+            len(failed),
+            ", ".join(failed),
+            attempt,
+            len(STARTUP_RETRY_DELAYS),
+        )
+        await asyncio.sleep(delay)
+        still_failed: dict[str, dict] = {}
+        for name, srv in failed.items():
+            if not await _try_connect(_manager, name, srv):
+                still_failed[name] = srv
+        failed = still_failed
+
+    if failed:
+        logger.warning(
+            "Gave up on %d backend(s) after retries: %s",
+            len(failed),
+            ", ".join(failed),
+        )
 
     _catalog = ToolCatalog(_manager, config.get("groups", {}))
     await _catalog.discover_all()
