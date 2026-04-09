@@ -14,7 +14,6 @@ import json
 import logging
 import os
 import re
-import sys
 import time
 from datetime import timedelta
 from pathlib import Path
@@ -24,9 +23,52 @@ from mcp.client.stdio import StdioServerParameters, stdio_client
 from mcp.client.streamable_http import streamablehttp_client
 from mcp.server.fastmcp import FastMCP
 from starlette.requests import Request
-from starlette.responses import JSONResponse
+from starlette.responses import JSONResponse, Response
 
 logger = logging.getLogger("toolshed")
+
+
+# ---------------------------------------------------------------------------
+# ASGI middleware — absorbs MCP SDK shutdown race conditions
+# ---------------------------------------------------------------------------
+
+
+class ShutdownGuardMiddleware:
+    """Catch RuntimeError/CancelledError from the MCP session manager during shutdown.
+
+    The MCP SDK's StreamableHTTPSessionManager sets _task_group = None during
+    lifespan teardown, but uvicorn may still be draining connections.  Requests
+    that arrive in that window raise RuntimeError("Task group is not
+    initialized") or get hit by CancelledError propagation.  Instead of letting
+    those crash the process, return 503 so the client can retry.
+    """
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+        try:
+            await self.app(scope, receive, send)
+        except RuntimeError as e:
+            if "Task group" in str(e) or "cancel scope" in str(e):
+                logger.debug("Request during shutdown: %s", e)
+                resp = Response("Service shutting down", status_code=503)
+                await resp(scope, receive, send)
+                return
+            raise
+        except asyncio.CancelledError:
+            logger.debug("Request cancelled during shutdown")
+            # Response may already be partially sent — just return
+        except BaseExceptionGroup as eg:
+            logger.debug("Task group teardown during request: %s", eg)
+            resp = Response("Service shutting down", status_code=503)
+            try:
+                await resp(scope, receive, send)
+            except Exception:
+                pass  # response may already be partially sent
 
 
 # ---------------------------------------------------------------------------
@@ -191,6 +233,8 @@ class BackendManager:
         self, name: str, tool: str, args: dict
     ) -> tuple[dict | None, str | None]:
         """Call a backend tool, returning (result, None) on success or (None, error_msg) on failure."""
+        if name not in self._sessions:
+            return None, f"Backend '{name}' not connected"
         timeout_s = self._configs.get(name, {}).get("timeout", DEFAULT_TIMEOUT_SECONDS)
         try:
             raw = await self._sessions[name].call_tool(
@@ -199,7 +243,13 @@ class BackendManager:
                 read_timeout_seconds=timedelta(seconds=timeout_s),
             )
             return _parse_tool_result(raw, tool, name), None
-        except (ConnectionError, OSError, asyncio.TimeoutError, EOFError) as e:
+        except (
+            ConnectionError,
+            OSError,
+            asyncio.TimeoutError,
+            EOFError,
+            RuntimeError,
+        ) as e:
             return None, str(e)
 
     async def call_backend_tool(self, name: str, tool: str, args: dict) -> dict:
@@ -560,11 +610,30 @@ def main():
     # Instead, let uvicorn handle SIGINT/SIGTERM natively (graceful shutdown).
 
     import anyio
+    import uvicorn
 
     async def run():
         await startup(args.config)
         try:
-            await mcp_server.run_streamable_http_async()
+            # Build the ASGI app ourselves so we can wrap it with
+            # ShutdownGuardMiddleware.  run_streamable_http_async() doesn't
+            # expose the app or allow middleware injection.
+            starlette_app = mcp_server.streamable_http_app()
+            guarded_app = ShutdownGuardMiddleware(starlette_app)
+
+            config = uvicorn.Config(
+                guarded_app,
+                host=mcp_server.settings.host,
+                port=mcp_server.settings.port,
+                log_level=mcp_server.settings.log_level.lower(),
+                # Give active connections time to drain before force-closing.
+                # Without this, SIGTERM immediately tears down SSE streams,
+                # causing the "ASGI callable returned without completing
+                # response" errors.
+                timeout_graceful_shutdown=5,
+            )
+            server = uvicorn.Server(config)
+            await server.serve()
         finally:
             await shutdown_server()
 
@@ -572,6 +641,12 @@ def main():
         anyio.run(run)
     except (KeyboardInterrupt, SystemExit):
         logger.info("Toolshed exiting")
+    except (asyncio.CancelledError, RuntimeError, BaseExceptionGroup) as e:
+        # Client disconnects during SSE propagate CancelledError through
+        # anyio task groups, tearing down the server.  RuntimeError from
+        # "Task group is not initialized" can also escape if the middleware
+        # didn't catch it (e.g. during lifespan teardown).
+        logger.warning("Toolshed async teardown: %s", e)
 
 
 if __name__ == "__main__":
