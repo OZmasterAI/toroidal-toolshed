@@ -15,7 +15,7 @@ mkdir -p "$LOG_DIR"
 # ── Server definitions: name, port, command ──
 declare -A SERVERS=(
     [memory]="8742|python3 $CLAUDE_DIR/hooks/memory_server.py --http --port 8742"
-    [skills-v2]="8743|python3 $CLAUDE_DIR/hooks/skill_server_v2.py --http --port 8743"
+    [skills-v2]="8743|python3 $CLAUDE_DIR/torus-skills/trs_skill_server.py --http --port 8743"
     [search]="8744|python3 $CLAUDE_DIR/hooks/search_server.py --http --port 8744"
     [web-search]="8745|python3 $CLAUDE_DIR/hooks/web_search_server.py --http --port 8745"
     [analytics]="8746|python3 $CLAUDE_DIR/hooks/analytics_server.py --http --port 8746"
