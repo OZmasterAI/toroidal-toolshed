@@ -164,6 +164,35 @@ toolshed.service        # systemd unit template
 requirements.txt        # Python dependencies
 ```
 
+## Works with Toroidal Skills
+
+Toolshed and [Toroidal Skills](https://github.com/OZmasterAI/toroidal-skills) are designed to work together. Register the skill server as a backend in `toolshed.json` and your agent gets skill discovery, invocation, and quality tracking through the same 2-tool interface:
+
+```json
+{
+  "servers": {
+    "skills-v2": {
+      "type": "http",
+      "url": "http://127.0.0.1:8743/mcp"
+    }
+  }
+}
+```
+
+Both can also be used independently.
+
+## As a submodule
+
+Can be used as a submodule in any project, including [Torus-Framework](https://github.com/OZmasterAI/Torus-Framework):
+
+```bash
+git submodule add https://github.com/OZmasterAI/toroidal-toolshed.git toolshed
+```
+
+## Built with
+
+Built with [Torus Framework](https://github.com/OZmasterAI/Torus-Framework) — a self-evolving quality framework for Claude Code.
+
 ## License
 
 MIT
