@@ -195,4 +195,4 @@ Built with [Torus Framework](https://github.com/OZmasterAI/Torus-Framework) — 
 
 ## License
 
-MIT
+Apache-2.0
