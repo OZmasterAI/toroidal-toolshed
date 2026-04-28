@@ -171,7 +171,7 @@ Toolshed and [Toroidal Skills](https://github.com/OZmasterAI/toroidal-skills) ar
 ```json
 {
   "servers": {
-    "skills-v2": {
+    "torus-skills": {
       "type": "http",
       "url": "http://127.0.0.1:8743/mcp"
     }

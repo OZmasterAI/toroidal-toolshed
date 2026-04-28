@@ -15,7 +15,7 @@ mkdir -p "$LOG_DIR"
 # ── Server definitions: name, port, command ──
 declare -A SERVERS=(
     [memory]="8742|python3 $CLAUDE_DIR/hooks/memory_server.py --http --port 8742"
-    [skills-v2]="8743|python3 $CLAUDE_DIR/torus-skills/trs_skill_server.py --http --port 8743"
+    [torus-skills]="8743|python3 $CLAUDE_DIR/torus-skills/trs_skill_server.py --http --port 8743"
     [search]="8744|python3 $CLAUDE_DIR/hooks/search_server.py --http --port 8744"
     [web-search]="8745|python3 $CLAUDE_DIR/hooks/web_search_server.py --http --port 8745"
     [analytics]="8746|python3 $CLAUDE_DIR/hooks/analytics_server.py --http --port 8746"
@@ -24,7 +24,7 @@ declare -A SERVERS=(
 )
 
 # ── Boot order: backends first, then toolshed ──
-BOOT_ORDER=(memory skills-v2 search web-search analytics model-router toolshed)
+BOOT_ORDER=(memory torus-skills search web-search analytics model-router toolshed)
 
 port_listening() {
     python3 -c "import socket; s=socket.socket(); s.settimeout(0.3); exit(0 if s.connect_ex(('127.0.0.1',$1))==0 else 1)" 2>/dev/null

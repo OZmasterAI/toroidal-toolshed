@@ -132,16 +132,16 @@ MOCK_CATALOG_DATA = {
         "last_refresh": time.time(),
         "status": "connected",
     },
-    "skills-v2": {
+    "torus-skills": {
         "tools": [
             {
-                "server": "skills-v2",
+                "server": "torus-skills",
                 "name": "list_skills",
                 "description": "List skills",
                 "inputSchema": {},
             },
             {
-                "server": "skills-v2",
+                "server": "torus-skills",
                 "name": "invoke_skill",
                 "description": "Run a skill",
                 "inputSchema": {},
@@ -154,7 +154,7 @@ MOCK_CATALOG_DATA = {
 
 MOCK_GROUPS = {
     "research": ["memory:search_knowledge", "memory:get_memory"],
-    "save": ["memory:remember_this", "skills-v2:capture_skill"],
+    "save": ["memory:remember_this", "torus-skills:capture_skill"],
 }
 
 
@@ -182,7 +182,7 @@ class TestToolCatalog:
         cat = _make_catalog()
         groups = cat.get_groups()
         assert "memory" in groups
-        assert "skills-v2" in groups
+        assert "torus-skills" in groups
 
     def test_manual_groups(self):
         cat = _make_catalog()
