@@ -19,7 +19,7 @@ declare -A SERVERS=(
     [search]="8744|python3 $CLAUDE_DIR/hooks/search_server.py --http --port 8744"
     [web-search]="8745|python3 $CLAUDE_DIR/hooks/web_search_server.py --http --port 8745"
     [analytics]="8746|python3 $CLAUDE_DIR/hooks/analytics_server.py --http --port 8746"
-    [model-router]="8747|python3 $CLAUDE_DIR/integrations/model-router/mcp_bridge.py --http --port 8747"
+    [model-router]="8747|python3 $CLAUDE_DIR/toroidal-model-router/mcp_bridge.py --http --port 8747"
     [toolshed]="8750|python3 $TOOLSHED_DIR/toolshed.py --config $TOOLSHED_DIR/toolshed.json --port 8750"
 )
 
