@@ -3,7 +3,7 @@
 # Subsequent sessions find them already running and skip straight to the bridge.
 #
 # mcp.json entry:
-#   { "command": "bash", "args": ["$HOME/projects/toolshed/torus-launcher.sh"] }
+#   { "command": "bash", "args": ["<REPO>/toolshed/torus-launcher.sh"] }
 
 set -euo pipefail
 

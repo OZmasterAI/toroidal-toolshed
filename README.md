@@ -157,6 +157,8 @@ journalctl --user -u toolshed -f
 
 ```
 toolshed.py             # Server (single file, all logic)
+toolshed_bridge.py      # stdio-to-HTTP bridge for Claude Code MCP integration
+torus-launcher.sh       # Startup script that launches all MCP backend servers on first session
 toolshed.json           # Your backend config (gitignored)
 toolshed.example.json   # Example config to copy
 test_toolshed.py        # Test suite
