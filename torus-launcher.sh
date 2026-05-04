@@ -21,7 +21,7 @@ declare -A SERVERS=(
     [analytics]="8746|python3 $CLAUDE_DIR/hooks/analytics_server.py --http --port 8746"
     [model-router]="8747|python3 $CLAUDE_DIR/toroidal-model-router/mcp_bridge.py --http --port 8747"
     [indexer]="8748|python3 $CLAUDE_DIR/toroidal-indexer/indexer_server.py --http --port 8748"
-    [torus]="8751|node /home/crab/projects/torus-mcp-server/dist/index.js"
+    [torus]="8751|node $HOME/projects/torus-mcp-server/dist/index.js"
     [toolshed]="8750|python3 $TOOLSHED_DIR/toolshed.py --config $TOOLSHED_DIR/toolshed.json --port 8750"
 )
 
