@@ -20,11 +20,12 @@ declare -A SERVERS=(
     [web-search]="8745|python3 $CLAUDE_DIR/hooks/web_search_server.py --http --port 8745"
     [analytics]="8746|python3 $CLAUDE_DIR/hooks/analytics_server.py --http --port 8746"
     [model-router]="8747|python3 $CLAUDE_DIR/toroidal-model-router/mcp_bridge.py --http --port 8747"
+    [torus]="8751|node /home/crab/projects/torus-mcp-server/dist/index.js"
     [toolshed]="8750|python3 $TOOLSHED_DIR/toolshed.py --config $TOOLSHED_DIR/toolshed.json --port 8750"
 )
 
 # ── Boot order: backends first, then toolshed ──
-BOOT_ORDER=(memory torus-skills search web-search analytics model-router toolshed)
+BOOT_ORDER=(memory torus-skills search web-search analytics model-router torus toolshed)
 
 port_listening() {
     python3 -c "import socket; s=socket.socket(); s.settimeout(0.3); exit(0 if s.connect_ex(('127.0.0.1',$1))==0 else 1)" 2>/dev/null
