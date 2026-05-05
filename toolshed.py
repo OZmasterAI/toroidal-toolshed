@@ -20,7 +20,7 @@ from pathlib import Path
 
 from mcp.client.session import ClientSession
 from mcp.client.stdio import StdioServerParameters, stdio_client
-from mcp.client.streamable_http import streamablehttp_client
+from mcp.client.streamable_http import streamable_http_client
 from mcp.server.fastmcp import FastMCP
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
@@ -169,14 +169,27 @@ class BackendManager:
     async def connect_http(
         self, name: str, url: str, srv_cfg: dict | None = None
     ) -> None:
-        """Connect to an HTTP MCP backend (streamable-http)."""
+        """Connect to an HTTP MCP backend (streamable-http).
+
+        Runs the transport setup in an isolated asyncio.Task so that anyio
+        cancel-scope lifecycle stays within a single task. Without this,
+        a failing backend (e.g. cross-SDK Node server returning 400/500)
+        can corrupt the event loop via orphaned cancel scopes.
+        """
         self._configs[name] = srv_cfg or {"type": "http", "url": url}
-        try:
-            self._ctx[name] = streamablehttp_client(url=url)
+
+        async def _do_connect():
+            self._ctx[name] = streamable_http_client(url=url)
             read, write, _ = await self._ctx[name].__aenter__()
             self._session_ctx[name] = ClientSession(read, write)
             self._sessions[name] = await self._session_ctx[name].__aenter__()
             await self._sessions[name].initialize()
+
+        timeout = (srv_cfg or {}).get("timeout", DEFAULT_TIMEOUT_SECONDS)
+        try:
+            await asyncio.wait_for(
+                asyncio.ensure_future(_do_connect()), timeout=timeout
+            )
             concurrency = (srv_cfg or {}).get("concurrency", DEFAULT_CONCURRENCY)
             self._semaphores[name] = asyncio.Semaphore(concurrency)
             logger.info("Connected to HTTP backend: %s (%s)", name, url)
@@ -186,6 +199,7 @@ class BackendManager:
             asyncio.TimeoutError,
             RuntimeError,
             BaseExceptionGroup,
+            asyncio.CancelledError,
         ) as e:
             await self._cleanup_backend(name)
             raise ConnectionError(
