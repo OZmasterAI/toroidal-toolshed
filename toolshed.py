@@ -22,6 +22,7 @@ from mcp.client.session import ClientSession
 from mcp.client.stdio import StdioServerParameters, stdio_client
 from mcp.client.streamable_http import streamable_http_client
 from mcp.server.fastmcp import FastMCP
+from mcp.shared.exceptions import McpError
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
@@ -263,6 +264,7 @@ class BackendManager:
             asyncio.TimeoutError,
             EOFError,
             RuntimeError,
+            McpError,
         ) as e:
             return None, str(e)
 
